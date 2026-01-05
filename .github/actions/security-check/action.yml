@@ -1,0 +1,38 @@
+name: 'Security Check'
+description: 'Runs bandit scan and builds Docker image if safe'
+inputs:
+  python_file:
+    description: 'Python file to check'
+    required: true
+  log_file:
+    description: 'Path to store the log'
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install bandit
+      shell: bash
+      run: pip install bandit
+
+    - name: Run bandit scan
+      shell: bash
+      run: |
+        bandit ${{ inputs.python_file }} -r -f txt -o ${{ inputs.log_file }}
+        echo "Scan completed"
+
+    - name: Check for issues
+      id: check_issues
+      shell: bash
+      run: |
+        if grep -q "Issue:" ${{ inputs.log_file }}; then
+          echo "SECURITY_ISSUES=true" >> $GITHUB_OUTPUT
+        else
+          echo "SECURITY_ISSUES=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Build Docker image if no issues
+      if: steps.check_issues.outputs.SECURITY_ISSUES == 'false'
+      shell: bash
+      run: |
+        docker build -t python-secure-app .
